@@ -1,0 +1,36 @@
+rules_version = '2';
+
+// Docs: https://firebase.google.com/docs/storage/security
+service firebase.storage {
+  match /b/{bucket}/o {
+  
+    // Helper function to check for authenticated users.
+    function isSignedIn() {
+      return request.auth != null;
+    }
+  
+    // Allow anyone to read public profile images.
+    match /public/profiles/{userId}/{fileName} {
+      allow read: if true;
+      allow write: if isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Allow authenticated users to upload complaint attachments to their own folder.
+    // The folder is named after their user ID for organization.
+    match /complaints/{userId}/{fileName} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to upload project photos.
+    // The path could be structured further, e.g., by project ID.
+    match /projects/{fileName} {
+      allow read: if true; // Or restrict to signed-in users
+      allow write: if isSignedIn();
+    }
+    
+    // Fallback rule: Deny all other reads and writes by default for security.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

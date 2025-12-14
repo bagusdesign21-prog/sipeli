@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Helper Function ---
+    function isAdmin() {
+      // Defensive check to prevent errors if request.auth is null.
+      return request.auth != null && 
+             exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+             get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // --- Publicly Readable Collections ---
+    // Anyone, authenticated or not, can read this data.
+    // Writing is restricted to admins.
+    match /villages/{villageId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /pejabat/{pejabatId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+    
+    match /legalDocuments/{documentId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    // --- Publicly Creatable Collections ---
+    // Anyone can create (submit) these, but only admins can manage them.
+    match /complaints/{complaintId} {
+      allow create: if true;
+      allow read, list, update, delete: if isAdmin();
+    }
+    
+    match /ikm-surveys/{surveyId} {
+      allow create: if true;
+      allow read, list, update, delete: if isAdmin();
+    }
+
+    // --- Authenticated User Data ---
+    match /users/{userId} {
+      allow get, update, delete: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow list: if isAdmin(); 
+    }
+    
+    match /announcements/{announcementId} {
+      allow read: if request.auth != null;
+      allow write: if isAdmin();
+    }
+
+    match /guestbook/{entryId} {
+        allow create: if request.auth != null;
+        allow read, list, update, delete: if isAdmin();
+    }
+
+    // --- User-Owned Data (Requires Secure Queries from Client) ---
+    match /serviceHistory/{historyId} {
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.userId;
+      // Users can only read their OWN history.
+      // The frontend client MUST use a query like: .where("userId", "==", auth.currentUser.uid)
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow update, delete: if isAdmin();
+    }
+    
+    match /project-photos/{photoId} {
+       allow create, update, delete: if request.auth != null && request.auth.uid == request.resource.data.userId;
+       // Users can only read their OWN photos.
+       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+     }
+  }
+}
